@@ -26,6 +26,8 @@ app.use(cookieParser());
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // Public
+const here = path.dirname(fileURLToPath(import.meta.url));
+app.use('/brand', express.static(path.resolve(here, '../public/brand'), { maxAge: '7d', fallthrough: false }));
 app.use('/api/auth', authRoutes);
 app.use('/api/track', trackRouter);
 app.use('/v', viewerRouter);
@@ -39,7 +41,7 @@ app.use('/api/stats', requireAuth, statsRoutes);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Serve the built React app in production (npm run build)
-const clientDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../client/dist');
+const clientDist = path.resolve(here, '../../client/dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist, { index: false, maxAge: '1h' }));
   app.get('*', (req, res) => res.sendFile(path.join(clientDist, 'index.html')));

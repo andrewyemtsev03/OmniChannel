@@ -51,6 +51,21 @@ export function phone(p) {
   return m ? `+7 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : `+${p}`;
 }
 
+// "Иванова Анна Сергеевна" -> "ИА"; "Platform Admin" -> "PA"
+export function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
+}
+
+export function greeting(name) {
+  const h = new Date().getHours();
+  const part = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  const first = String(name || '').trim().split(/\s+/)[0];
+  return first ? `${part}, ${first}` : part;
+}
+
+export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
 export const STATUS_LABEL = { draft: 'Draft', in_review: 'In MLR review', approved: 'Approved', archived: 'Archived' };
 export const CHANNEL_LABEL = { any: 'All channels', whatsapp: 'WhatsApp', email: 'Email', portal: 'HCP portal' };
 export const METHOD_LABEL = { written: 'Signed paper form', egov: 'eGov Mobile', digital: 'Digital form', other: 'Other' };

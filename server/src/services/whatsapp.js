@@ -1,7 +1,14 @@
 import { config, whatsappConfigured } from '../config.js';
 
+// Russian etiquette: address by first name + patronymic. "Иванова Анна Сергеевна" -> "Анна Сергеевна".
+// Names without a patronymic (two words or fewer) are used as given.
+export function greetingName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/);
+  return parts.length >= 3 ? parts.slice(1).join(' ') : parts.join(' ');
+}
+
 export function messageText({ doctorName, title, url }) {
-  return `Здравствуйте, ${doctorName}! Направляю вам материал «${title}»: ${url}`;
+  return `Здравствуйте, ${greetingName(doctorName)}! Направляю вам материал «${title}»: ${url}`;
 }
 
 // Click-to-chat link: opens WhatsApp on the rep's phone with the message pre-filled.
@@ -34,7 +41,7 @@ export async function sendPresentationLink({ phone, doctorName, title, url }) {
           components: [{
             type: 'body',
             parameters: [
-              { type: 'text', text: doctorName },
+              { type: 'text', text: greetingName(doctorName) },
               { type: 'text', text: title },
               { type: 'text', text: url },
             ],

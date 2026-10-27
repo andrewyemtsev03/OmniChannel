@@ -90,11 +90,44 @@ export async function overviewStats(repId = null) {
       [repId]
     ),
   ]);
+  const [followups, daily, reviewQueue] = await Promise.all([
+    // Links sent 3+ days ago that the doctor still hasn't opened: candidates for a rep follow-up.
+    query(
+      `SELECT l.id, l.created_at, l.channel, d.id AS doctor_id, d.full_name, d.specialty, p.id AS presentation_id, p.title
+       FROM links l JOIN doctors d ON d.id = l.doctor_id JOIN presentations p ON p.id = l.presentation_id
+       WHERE l.first_opened_at IS NULL AND p.status = 'approved'
+         AND l.created_at < now() - interval '3 days' AND l.created_at > now() - interval '60 days'
+         AND ${scope}
+       ORDER BY l.created_at DESC LIMIT 6`,
+      [repId]
+    ),
+    // Viewing sessions per day for the last 30 days (zero-filled).
+    query(
+      `SELECT to_char(day, 'YYYY-MM-DD') AS day, COALESCE(n, 0)::int AS views
+       FROM generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') AS day
+       LEFT JOIN (
+         SELECT date_trunc('day', vs.started_at) AS d, count(*) AS n
+         FROM view_sessions vs JOIN links l ON l.id = vs.link_id JOIN doctors d ON d.id = l.doctor_id
+         WHERE vs.started_at > now() - interval '30 days' AND ${scope}
+         GROUP BY 1
+       ) v ON v.d = day
+       ORDER BY day`,
+      [repId]
+    ),
+    query(
+      `SELECT p.id, p.title, p.product, p.updated_at, u.name AS uploaded_by_name
+       FROM presentations p LEFT JOIN users u ON u.id = p.uploaded_by
+       WHERE p.status = 'in_review' ORDER BY p.updated_at ASC LIMIT 5`
+    ),
+  ]);
   const a = activity.rows[0];
   return {
     ...counts.rows[0],
     ...a,
     open_rate_30d: a.links_30d ? a.opened_30d / a.links_30d : 0,
     recent_views: recent.rows,
+    followups: followups.rows,
+    daily_views: daily.rows,
+    review_queue: reviewQueue.rows,
   };
 }

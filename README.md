@@ -12,7 +12,10 @@ In-house platform for sending MLR-approved HTML presentations (for example, ones
 - **Sending** — each doctor gets a personal, tracked link. Send over WhatsApp (Cloud API, or test mode with a click-to-chat link) or create a link to show on a tablet during a visit.
 - **Doctor view** — a "for healthcare professionals only" confirmation, then the deck full screen, with the MLR code in a footer bar. Works on phones.
 - **Tracking** — time per slide, slides reached, number of views, open rate. Works with most HTML decks without changes.
+- **Overview** — 30-day engagement, views per day, and a "needs your attention" list: decks waiting for MLR review, links not opened after 3 days (follow-ups), doctors without СОПД.
 - **Team and audit** — roles (admin, MLR reviewer, medical rep) and an activity log of compliance-relevant actions.
+
+The interface follows the STADA corporate design manual: Noto Sans, STADA Blue `#005DB9` with Rubine `#D50058` as the accent, pill buttons, and the intersecting gradient circles. See [Design](#design).
 
 ## Run it locally
 
@@ -29,7 +32,7 @@ cp server/.env.example server/.env        # then edit values if needed
 npm install
 npm run install:all
 
-# 4. Optional: demo data (4 doctors, 1 approved sample deck, demo users)
+# 4. Optional: demo data (10 fictional doctors, 3 sample decks, a month of views, demo users)
 npm run seed
 
 # 5. Start server (:4000) and React app (:5173) together
@@ -111,6 +114,21 @@ Doctors must have opted in to WhatsApp messages from Stada; in the platform that
 | Send approved presentations | ✓ | ✓ | Own doctors |
 | Manage team, see activity log | ✓ | | |
 
+## Design
+
+The UI follows the *Руководство по корпоративному стилю STADA*:
+
+| Element | Rule from the manual | How it is used here |
+|---|---|---|
+| STADA Blue `#005DB9` (Pantone 300) | Primary colour | Headings, buttons, links, "ready / approved" states, charts |
+| Rubine `#D50058` | Accent colour | Things that need someone's action: decks in MLR review, missing СОПД, slide attention, focus rings |
+| Grey `#828895` (Pantone 430) | Secondary | Secondary labels (body text uses a darker grey to stay readable) |
+| Noto Sans | Corporate font; headings Regular, emphasis Bold | Self-hosted, with Cyrillic and extended Cyrillic for Kazakh letters. No requests to Google |
+| Two intersecting circles, 1% → 100% gradient | Key design element; always overlapping | Page headers, sign-in, the doctor's confirmation screen, empty states, favicon |
+| Pill buttons, white surfaces, light grey bands | Website template library | All buttons and page layout |
+
+**Logo:** `server/public/brand/stada-logo.png` was taken from the brand book PDF (it is a 443×259 raster there). It is fine on screen, but ask STADA's communications team for the official SVG and replace the file; the manual forbids changing the logo's shape or colours. The Blair ITC typeface used for STADA buttons is licensed and not included.
+
 ## Project structure
 
 ```
@@ -126,12 +144,14 @@ stada-omnichannel/
 │   │   ├── routes/             auth, users, doctors (+consents, import), presentations, send, viewer (+tracking), stats
 │   │   ├── services/           viewer pages + slide reporter, WhatsApp, file storage, stats queries
 │   │   └── seed.js             demo data
+│   ├── public/brand/           logo and self-hosted Noto Sans for the doctor-facing pages
 │   └── sample/sample-deck.html
 ├── client/                     React app (Vite)
 │   └── src/
 │       ├── App.jsx             routing, sign-in state, top bar
 │       ├── api.js, lib.js      fetch wrapper, hooks, formatting
-│       ├── components.jsx      shared UI pieces
+│       ├── ui.jsx              design-system components: icons, circles, dialogs, toasts, chips…
+│       ├── styles.css          STADA design tokens and all styles
 │       └── pages/              Overview, Doctors, DoctorDetail, Presentations, PresentationDetail, Send, Users
 ├── docker-compose.yml          local PostgreSQL
 ├── README.md                   this file

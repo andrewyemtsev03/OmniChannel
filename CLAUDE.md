@@ -44,17 +44,28 @@ npm run build         # React build -> client/dist, served by the Node server in
 - WhatsApp: `services/whatsapp.js`. Without `WHATSAPP_TOKEN` it runs in dry-run mode and returns a `wa.me` click-to-chat URL. Live mode sends an approved template with 3 body variables (name, title, link).
 - Stats SQL lives in `services/stats.js`.
 
+## Design system (STADA corporate design)
+
+The user supplied the STADA brand book; the UI must keep to it.
+
+- Tokens live at the top of `client/src/styles.css`. Blue `#005DB9` is primary (headings, actions, "ready/approved"). Rubine `#D50058` is the accent and means "needs someone's action" (MLR review, missing СОПД, slide attention, focus). Brand grey `#828895` only for large/secondary labels; small text uses `--text-3` for contrast. No green: "OK" states are blue.
+- Font is Noto Sans, self-hosted (`@fontsource/noto-sans` in the client, `server/public/brand/fonts` for the viewer). Never add Google Fonts or other third-party requests: doctors' IPs must not leave Kazakhstan.
+- Headings are Noto Sans Regular in blue; buttons are pills (`.btn`, `.btn.primary`, `.btn.quiet`, `.btn.danger`).
+- The brand device is two intersecting circles with a 1% → 100% gradient (`<Circles />`). Circles always overlap; use them sparingly (page hero, login, viewer gate, empty states).
+- Logo: `server/public/brand/stada-logo.png`, served at `/brand/stada-logo.png`. Never recolour or reshape it.
+- Use components from `client/src/ui.jsx`: `PageHero`, `Dialog`/`FormDialog` for forms (no inline forms), `useFeedback()` for `toast()` and `confirm()` (never `window.confirm`), `Chips`, `SearchInput`, `Empty`, `Skeleton*`, `Avatar`, `Stamp`, `ConsentMark`, `Icon`.
+- Doctor-facing text addresses doctors by first name + patronymic (`greetingName()` in `server/src/services/whatsapp.js`; mirrored in `Send.jsx`).
+
 ## Conventions
 
 - Admin UI text is **English**; everything a doctor sees (viewer, gate, messages) is **Russian**. Domain terms stay as used locally: СОПД, MLR, Proxima.
 - UI copy: sentence case, plain verbs, errors say what happened and how to fix it.
-- Design tokens are CSS variables at the top of `styles.css`. Gold (`--gold`) is reserved for the slide attention strip; actions are green.
 - Route handlers are wrapped in `ah()` and throw `HttpError(status, message)`; messages are shown to users, so write them for people.
 - Keep dependencies minimal; prefer plain SQL and small modules.
 
 ## Status (MVP, Oct 2026)
 
-Built and tested end to end: login and roles, doctors + CSV import, consents, upload + MLR workflow, sandboxed preview, send (link / WhatsApp dry-run), doctor viewer with HCP gate, per-slide tracking, dashboards, team management, audit log.
+Built and tested end to end (desktop and mobile, STADA-branded UI): login and roles, doctors + CSV import, consents, upload + MLR workflow, sandboxed preview, send (link / WhatsApp dry-run), doctor viewer with HCP gate, per-slide tracking, dashboards, team management, audit log.
 
 Not built yet (see README "Ideas for next versions"): Proxima API sync, SSO, four-eyes approval, WhatsApp webhooks and inbox, HCP portal, email channel, journeys, automated tests.
 

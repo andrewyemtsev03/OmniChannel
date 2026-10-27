@@ -3,17 +3,18 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../App.jsx';
 import { useLoad, date, duration, pct, ago } from '../lib.js';
-import { Stamp, Kpis, ErrorNote, Empty, Loading } from '../components.jsx';
+import { Avatar, Empty, ErrorNote, FormDialog, Icon, Kpis, Notice, PageHero, Skeleton, Stamp, useFeedback } from '../ui.jsx';
 
-// The signature view: one tile per slide. Fill height = average time on the slide
-// (relative to the slowest slide); fill strength = share of viewers who reached it.
+// One tile per slide. Fill height = average time on the slide relative to the slowest one;
+// fill strength = share of views that reached it. Rubine is the brand accent: "look here".
 function AttentionStrip({ slides, slideCount }) {
   const count = Math.max(slideCount || 0, ...slides.map((s) => s.slide), 0);
-  if (!count) return null;
   const bySlide = new Map(slides.map((s) => [s.slide, s]));
   const maxAvg = Math.max(1, ...slides.map((s) => s.avg_seconds));
+  const top = slides.length ? slides.reduce((a, b) => (b.avg_seconds > a.avg_seconds ? b : a)) : null;
   return (
     <>
+      {top && <p style={{ color: 'var(--text-2)', fontSize: 14, marginBottom: 16 }}>Doctors spend the most time on slide {top.slide} ({duration(top.avg_seconds)} on average).</p>}
       <div className="attention" role="list" aria-label="Attention per slide">
         {Array.from({ length: count }, (_, i) => {
           const s = bySlide.get(i + 1);
@@ -26,10 +27,9 @@ function AttentionStrip({ slides, slideCount }) {
             );
           }
           return (
-            <div key={i} className="slide-cell" role="listitem"
-              aria-label={`Slide ${i + 1}: average ${duration(s.avg_seconds)}, reached by ${pct(s.reach)} of views`}>
+            <div key={i} className="slide-cell" role="listitem" aria-label={`Slide ${i + 1}: average ${duration(s.avg_seconds)}, reached by ${pct(s.reach)} of views`}>
               <div className="slide-tile">
-                <div className="fill" style={{ height: `${Math.max(6, (s.avg_seconds / maxAvg) * 100)}%`, opacity: 0.25 + 0.75 * s.reach }} />
+                <div className="fill" style={{ height: `${Math.max(6, (s.avg_seconds / maxAvg) * 100)}%`, opacity: 0.3 + 0.7 * s.reach }} />
                 <span className="n">{i + 1}</span>
               </div>
               <div className="slide-cap"><strong>{duration(s.avg_seconds)}</strong><span>{pct(s.reach)} reached</span></div>
@@ -38,162 +38,177 @@ function AttentionStrip({ slides, slideCount }) {
         })}
       </div>
       <div className="legend">
-        <span>Fill height: average time on the slide</span>
-        <span>Fill strength: share of views that reached it</span>
+        <span><i />Taller fill: more time on the slide</span>
+        <span><i className="faint" />Paler fill: fewer viewers got this far</span>
       </div>
     </>
+  );
+}
+
+function Workflow({ p }) {
+  const order = ['draft', 'in_review', 'approved'];
+  const idx = p.status === 'archived' ? 3 : order.indexOf(p.status);
+  const steps = [
+    { key: 'draft', label: 'Draft', note: `Uploaded by ${p.uploaded_by_name || 'unknown'}, ${date(p.created_at, false)}` },
+    { key: 'in_review', label: 'MLR review', note: p.status === 'in_review' ? `Waiting since ${ago(p.updated_at)}` : idx > 1 ? 'Reviewed' : 'Not submitted yet' },
+    { key: 'approved', label: 'Approved', note: p.approved_at ? `${p.approved_by_name || 'Reviewer'}, ${date(p.approved_at, false)}` : 'Can be sent once approved' },
+  ];
+  return (
+    <div className="card steps" aria-label="Approval progress">
+      {steps.map((s, i) => {
+        const done = i < idx || (i === 2 && idx >= 2);
+        const current = i === idx;
+        return (
+          <div key={s.key} className={`wstep ${done ? 'done' : ''} ${current ? 'current' : ''} ${current && i === 2 ? 'ok' : ''}`} aria-current={current ? 'step' : undefined}>
+            <span className="dot">{done ? <Icon name="check" /> : current ? <Icon name="clock" /> : <span style={{ fontSize: 12, fontWeight: 600 }}>{i + 1}</span>}</span>
+            <div><strong>{s.label}</strong><span>{s.note}</span></div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
 function Actions({ p, onChange }) {
   const user = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState(null); // 'approve' | 'reject' | 'replace'
+  const { toast, confirm } = useFeedback();
+  const [dialog, setDialog] = useState(null); // 'approve' | 'reject' | 'replace'
   const [value, setValue] = useState('');
   const [file, setFile] = useState(null);
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
   const canReview = user.role === 'admin' || user.role === 'reviewer';
-
-  const run = async (fn) => {
-    setBusy(true);
-    setError(null);
-    try { await fn(); setMode(null); setValue(''); onChange(); } catch (err) { setError(err); }
-    setBusy(false);
-  };
-  const act = (action, body) => run(() => api.post(`/api/presentations/${p.id}/${action}`, body));
+  const open = (d) => { setValue(''); setFile(null); setDialog(d); };
+  const act = async (action, body, msg) => { await api.post(`/api/presentations/${p.id}/${action}`, body); toast(msg); onChange(); };
+  const safely = async (fn) => { try { await fn(); } catch (err) { toast(err.message, 'error'); } };
 
   return (
-    <div className="stack" style={{ justifyItems: 'end' }}>
-      <div className="row">
-        {p.status === 'approved' && <button className="btn primary" onClick={() => navigate('/send', { state: { presentationId: p.id } })}>Send to doctors</button>}
-        {canReview && p.status === 'draft' && <>
-          <button className="btn" onClick={() => setMode(mode === 'replace' ? null : 'replace')}>Replace file</button>
-          <button className="btn primary" disabled={busy} onClick={() => act('submit')}>Submit for MLR review</button>
-        </>}
-        {canReview && p.status === 'in_review' && <>
-          <button className="btn" onClick={() => setMode(mode === 'reject' ? null : 'reject')}>Return for changes</button>
-          <button className="btn primary" onClick={() => setMode(mode === 'approve' ? null : 'approve')}>Approve</button>
-        </>}
-        {user.role === 'admin' && p.status !== 'archived' && (
-          <button className="btn ghost" disabled={busy} onClick={() => {
-            if (window.confirm('Archive this presentation? Links already sent will stop working.')) act('archive');
-          }}>Archive</button>
-        )}
-        {user.role === 'admin' && p.links_count === 0 && (
-          <button className="btn ghost" disabled={busy} onClick={() => {
-            if (window.confirm('Delete this presentation permanently?')) run(async () => { await api.del(`/api/presentations/${p.id}`); navigate('/presentations'); });
-          }}>Delete</button>
-        )}
-      </div>
-      <ErrorNote error={error} />
-      {mode === 'approve' && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); act('approve', { approval_code: value }); }}>
-          <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="MLR approval code" required style={{ width: 220 }} aria-label="MLR approval code" />
-          <button className="btn primary" disabled={busy}>Confirm approval</button>
-        </form>
+    <>
+      {p.status === 'approved' && <button className="btn primary" onClick={() => navigate('/send', { state: { presentationId: p.id } })}><Icon name="send" />Send to doctors</button>}
+      {canReview && p.status === 'draft' && <>
+        <button className="btn" onClick={() => open('replace')}><Icon name="upload" />Replace file</button>
+        <button className="btn primary" onClick={() => safely(() => act('submit', {}, 'Submitted for MLR review'))}>Submit for MLR review</button>
+      </>}
+      {canReview && p.status === 'in_review' && <>
+        <button className="btn" onClick={() => open('reject')}>Return for changes</button>
+        <button className="btn primary" onClick={() => open('approve')}><Icon name="check" />Approve</button>
+      </>}
+      {user.role === 'admin' && p.status !== 'archived' && (
+        <button className="btn quiet" onClick={async () => {
+          const ok = await confirm({ title: 'Archive this presentation?', confirmLabel: 'Archive', danger: true,
+            body: 'Links already sent to doctors will stop working and show "material is no longer available". Statistics are kept.' });
+          if (ok) safely(() => act('archive', {}, 'Presentation archived'));
+        }}><Icon name="archive" />Archive</button>
       )}
-      {mode === 'reject' && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); act('reject', { comment: value }); }}>
-          <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="What needs to change?" required style={{ width: 300 }} aria-label="Review comment" />
-          <button className="btn" disabled={busy}>Return to draft</button>
-        </form>
+      {user.role === 'admin' && p.links_count === 0 && (
+        <button className="btn quiet" onClick={async () => {
+          const ok = await confirm({ title: 'Delete this presentation?', confirmLabel: 'Delete', danger: true, body: 'It has not been sent to anyone, so nothing else is affected.' });
+          if (ok) safely(async () => { await api.del(`/api/presentations/${p.id}`); toast('Presentation deleted'); navigate('/presentations'); });
+        }}><Icon name="trash" />Delete</button>
       )}
-      {mode === 'replace' && (
-        <form className="row" onSubmit={(e) => {
-          e.preventDefault();
-          if (!file) return setError(new Error('Choose the new .html file'));
+
+      <FormDialog open={dialog === 'approve'} onClose={() => setDialog(null)} title="Approve for use with doctors" submitLabel="Approve"
+        description="After approval the file can't be changed, and reps can send it to doctors with consent."
+        onSubmit={() => act('approve', { approval_code: value }, 'Approved. Reps can now send it.')}>
+        <label className="field">MLR approval code
+          <input value={value} onChange={(e) => setValue(e.target.value)} required autoFocus placeholder="KZ-RX-2026-001" />
+          <span className="hint">Shown to doctors at the bottom of the presentation.</span>
+        </label>
+      </FormDialog>
+      <FormDialog open={dialog === 'reject'} onClose={() => setDialog(null)} title="Return for changes" submitLabel="Return to draft"
+        description="The uploader sees your comment on this page."
+        onSubmit={() => act('reject', { comment: value }, 'Returned to draft')}>
+        <label className="field">What needs to change?
+          <textarea value={value} onChange={(e) => setValue(e.target.value)} required autoFocus placeholder="Add the reference to the instructions on slide 4" />
+        </label>
+      </FormDialog>
+      <FormDialog open={dialog === 'replace'} onClose={() => setDialog(null)} title="Replace the file" submitLabel="Upload new version"
+        description={`This becomes version ${p.version + 1}. It stays a draft until it is submitted and approved.`}
+        onSubmit={async () => {
+          if (!file) throw new Error('Choose the new .html file.');
           const form = new FormData();
           form.append('file', file);
-          run(() => api.upload(`/api/presentations/${p.id}/file`, form));
+          await api.upload(`/api/presentations/${p.id}/file`, form);
+          toast(`Version ${p.version + 1} uploaded`);
+          onChange();
         }}>
-          <input type="file" accept=".html,.htm,text/html" onChange={(e) => setFile(e.target.files[0] || null)} style={{ width: 280 }} />
-          <button className="btn primary" disabled={busy}>Upload new version</button>
-        </form>
-      )}
-    </div>
+        <label className="field">New file<input type="file" accept=".html,.htm,text/html" onChange={(e) => setFile(e.target.files[0] || null)} /></label>
+      </FormDialog>
+    </>
   );
 }
 
 export default function PresentationDetail() {
   const { id } = useParams();
   const { data: p, error, loading, reload } = useLoad(() => api.get(`/api/presentations/${id}`), [id]);
-
-  if (loading && !p) return <Loading />;
-  if (error) return <ErrorNote error={error} />;
+  if (error) return <div className="page"><ErrorNote error={error} /></div>;
+  if (loading && !p) return <div className="page stack"><Skeleton h={120} r={18} /><Skeleton h={320} r={18} /></div>;
   const s = p.stats;
 
   return (
     <>
-      <Link className="crumb" to="/presentations">Presentations</Link>
-      <div className="page-head">
-        <div>
-          <div className="row" style={{ marginBottom: 8 }}>
-            <Stamp status={p.status} />
-            {p.approval_code && <span className="code small">{p.approval_code}</span>}
+      <PageHero crumb={{ to: '/presentations', label: 'Presentations' }} title={p.title} actions={<Actions p={p} onChange={reload} />}>
+        <span className="row" style={{ gap: 10, display: 'inline-flex' }}>
+          <Stamp status={p.status} />{p.approval_code && <span className="code">{p.approval_code}</span>}
+          <span>{p.product || 'No product'}, version {p.version}</span>
+        </span>
+      </PageHero>
+
+      <div className="page">
+        {p.status !== 'archived' ? <Workflow p={p} /> : <Notice icon="archive">This presentation is archived. Links sent to doctors no longer open it.</Notice>}
+        {p.status === 'draft' && p.review_comment && (
+          <div className="section"><Notice tone="attention"><strong>Returned by MLR review:</strong> {p.review_comment}</Notice></div>
+        )}
+
+        <div className="layout-2 section">
+          <div className="stack" style={{ gap: 20 }}>
+            <Kpis items={[
+              { label: 'Sent', value: s.links, sub: `${s.doctors_reached} doctors viewed it` },
+              { label: 'Opened', value: pct(s.open_rate), sub: `${s.opened_links} of ${s.links} links` },
+              { label: 'Average view', value: duration(s.avg_seconds), sub: `${s.sessions} views in total` },
+            ]} />
+            <div className="card">
+              <div className="card-head"><div><h2>Where doctors spend their time</h2><p>Average time per slide across all views</p></div></div>
+              <div className="card-body">
+                {s.slides.length === 0 && !p.slide_count
+                  ? <Empty title="No slide data yet">Slide-by-slide attention appears after the first doctor opens this presentation.</Empty>
+                  : <AttentionStrip slides={s.slides} slideCount={p.slide_count} />}
+              </div>
+            </div>
           </div>
-          <h1>{p.title}</h1>
-          <p>
-            {p.product || 'No product set'}, version {p.version}. Uploaded by {p.uploaded_by_name || '—'} {ago(p.created_at)}.
-            {p.approved_at && ` Approved by ${p.approved_by_name} on ${date(p.approved_at, false)}.`}
-          </p>
-          {p.description && <p className="small muted">{p.description}</p>}
+
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div className="card-head" style={{ paddingBottom: 14 }}>
+              <h2>Preview</h2>
+              <a className="btn sm" href={`/api/presentations/${p.id}/file`} target="_blank" rel="noreferrer"><Icon name="external" />Full screen</a>
+            </div>
+            <iframe className="preview" title={`Preview of ${p.title}`} src={`/api/presentations/${p.id}/file`}
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" />
+            <p className="small muted" style={{ padding: '10px 24px 16px', borderTop: '1px solid var(--line)' }}>Click the preview, then use arrow keys to change slides. Not tracked.</p>
+          </div>
         </div>
-        <Actions p={p} onChange={reload} />
-      </div>
 
-      {p.status === 'draft' && p.review_comment && (
-        <div className="notice" style={{ marginBottom: 20 }}><strong>Returned by MLR review:</strong> {p.review_comment}</div>
-      )}
-
-      <section className="section">
-        <h2>Engagement</h2>
-        <Kpis items={[
-          { label: 'Sent', value: s.links, sub: `${s.doctors_reached} doctors viewed it` },
-          { label: 'Opened', value: pct(s.open_rate), sub: `${s.opened_links} of ${s.links} links` },
-          { label: 'Views', value: s.sessions, sub: 'viewing sessions' },
-          { label: 'Average view', value: duration(s.avg_seconds), sub: `${duration(s.total_seconds)} in total` },
-        ]} />
-      </section>
-
-      <section className="section">
-        <h2>Where doctors spend their time</h2>
-        {s.slides.length === 0 && !p.slide_count ? (
-          <div className="table-wrap"><Empty title="No slide data yet">Slide-by-slide attention appears after the first doctor opens this presentation.</Empty></div>
-        ) : <AttentionStrip slides={s.slides} slideCount={p.slide_count} />}
-      </section>
-
-      <section className="section">
-        <h2>Doctors</h2>
-        <div className="table-wrap">
-          {s.doctors.length === 0 ? <Empty title="Not sent to anyone yet" /> : (
-            <table>
-              <thead><tr><th>Doctor</th><th>City</th><th className="num">Views</th><th className="num">Time</th><th>Last viewed</th></tr></thead>
-              <tbody>
-                {s.doctors.map((d) => (
-                  <tr key={d.id} className={d.sessions ? '' : 'disabled'}>
-                    <td><Link to={`/doctors/${d.id}`}>{d.full_name}</Link><div className="sub">{d.specialty || '—'}</div></td>
-                    <td>{d.city || '—'}</td>
-                    <td className="num">{d.sessions}</td>
-                    <td className="num">{duration(d.total_seconds)}</td>
-                    <td>{d.last_viewed_at ? ago(d.last_viewed_at) : `Not opened, sent ${ago(d.last_sent_at)}`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="card section">
+          <div className="card-head"><h2>Doctors</h2></div>
+          {s.doctors.length === 0 ? <Empty title="Not sent to anyone yet">{p.status === 'approved' ? 'Send it to doctors to start seeing engagement.' : 'It can be sent once MLR approves it.'}</Empty> : (
+            <div className="table-wrap" style={{ marginTop: 8 }}>
+              <table>
+                <thead><tr><th>Doctor</th><th>City</th><th className="num">Views</th><th className="num">Time</th><th>Last viewed</th></tr></thead>
+                <tbody>
+                  {s.doctors.map((d) => (
+                    <tr key={d.id} className={d.sessions ? '' : 'dim'}>
+                      <td><Link className="person" to={`/doctors/${d.id}`}><Avatar name={d.full_name} size="sm" /><div><div className="name">{d.full_name}</div><div className="sub">{d.specialty || '—'}</div></div></Link></td>
+                      <td>{d.city || '—'}</td>
+                      <td className="num">{d.sessions}</td>
+                      <td className="num">{duration(d.total_seconds)}</td>
+                      <td className="nowrap">{d.last_viewed_at ? ago(d.last_viewed_at) : `Not opened, sent ${ago(d.last_sent_at)}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
-      </section>
-
-      <section className="section">
-        <div className="section-head">
-          <h2>Preview</h2>
-          <a className="btn sm" href={`/api/presentations/${p.id}/file`} target="_blank" rel="noreferrer">Open in a new tab</a>
-        </div>
-        <iframe className="preview" title={`Preview of ${p.title}`} src={`/api/presentations/${p.id}/file`}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" />
-        <p className="small muted" style={{ marginTop: 8 }}>Click inside the preview to use the keyboard to change slides. Views here are not tracked.</p>
-      </section>
+      </div>
     </>
   );
 }
