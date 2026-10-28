@@ -49,6 +49,24 @@ Open http://localhost:5173.
 
 The database schema is created automatically on server start (`server/src/migrations`). The first admin is created from `ADMIN_EMAIL` / `ADMIN_PASSWORD` if there are no users yet.
 
+## Deploy a demo on Render
+
+For showing the platform to management with **fictional demo data only**. Render has no data centre in Kazakhstan (its regions are the US, Frankfurt and Singapore), so real doctors' data must not be stored there.
+
+1. Push this project to a GitHub repository (private is fine).
+2. On [render.com](https://render.com), choose **New → Blueprint**, connect GitHub and pick the repository. Render reads `render.yaml` and proposes a web service and a PostgreSQL database, both on the free plan in Frankfurt.
+3. Fill in the two prompted values: `ADMIN_EMAIL` and `ADMIN_PASSWORD` (your first admin login). `JWT_SECRET` is generated, `DATABASE_URL` is connected automatically, and the public link address is taken from Render.
+4. Click **Apply** and wait for the first build (a few minutes). Open `https://<service-name>.onrender.com` and sign in.
+5. `SEED_DEMO_DATA=true` loads the 10 fictional doctors, sample decks and demo users on start. It never duplicates data.
+
+Free-tier limits to know before a demo:
+
+- The service sleeps after 15 minutes without visits; the next visit waits about a minute. Open the site a few minutes before presenting.
+- The free database **expires 30 days after creation** (then a 14-day grace period to upgrade) and has no backups. Fine for a demo, not for a pilot.
+- Demo users `rep@stada.kz` and `mlr@stada.kz` have the passwords printed in this README. Set `SEED_DEMO_DATA` to `false` and deactivate them on the Team page if the link will be shared widely.
+
+Vercel is not needed: the Node server serves the React app, the API and the doctor links from one address, which keeps sign-in cookies simple. Uploaded presentations are stored in PostgreSQL, so nothing is lost when Render restarts the service.
+
 ## Run it in production
 
 ```bash
@@ -65,9 +83,8 @@ The Node server then serves both the API and the React app on one port (default 
 | `PUBLIC_BASE_URL` | The public HTTPS address doctors open, e.g. `https://hcp.example.kz` — used to build links |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `TRUST_PROXY=1` | When running behind a reverse proxy, so rate limits see the real client IP |
-| `UPLOAD_DIR` | Where uploaded decks are stored. **Back this folder up together with the database** |
 
-**Hosting:** Kazakhstan's personal data law requires databases with Kazakh citizens' personal data to be stored on servers in Kazakhstan. Host the server, the database and the uploads folder in a Kazakhstan data centre or cloud. Confirm the setup with your lawyer and Stada's IT/security team.
+**Hosting:** Kazakhstan's personal data law requires databases with Kazakh citizens' personal data to be stored on servers in Kazakhstan. Host the server and the database in a Kazakhstan data centre or cloud. Confirm the setup with your lawyer and Stada's IT/security team.
 
 ## Making Claude presentations track well
 
@@ -181,7 +198,7 @@ All `/api` routes except auth and tracking need a signed-in session cookie.
 
 - [ ] Lawyer approves the СОПД wording, purposes and retention periods; check whether Stada must register as a personal data operator under the 2026 amendments.
 - [ ] Confirm with Proxima who holds the consents in their doctor database and for which purpose. Stada will likely need its own consent for sending materials.
-- [ ] Hosting in Kazakhstan, HTTPS, daily backups of the database and `UPLOAD_DIR`.
+- [ ] Hosting in Kazakhstan, HTTPS, daily database backups (presentations are stored in the database too).
 - [ ] Strong `JWT_SECRET`, change the admin password, remove demo users and demo data.
 - [ ] Stada IT/security review; agree who supports the system when you are away.
 - [ ] Meta business verification and an approved WhatsApp template.

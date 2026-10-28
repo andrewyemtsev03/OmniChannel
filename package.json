@@ -9,9 +9,13 @@
     "build": "npm run build --prefix client",
     "start": "npm start --prefix server",
     "migrate": "npm run migrate --prefix server",
-    "seed": "npm run seed --prefix server"
+    "seed": "npm run seed --prefix server",
+    "render-build": "npm ci --prefix server --omit=dev && npm ci --prefix client --include=dev && npm run build --prefix client"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.19"
   }
 }

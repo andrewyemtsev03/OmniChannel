@@ -43,6 +43,8 @@ npm run build         # React build -> client/dist, served by the Node server in
 - Slide detection order: explicit `window.StadaTrack.slide(i, total)` → `[data-slide]`, `.slide`, `.slides > section`, `.reveal section`, `section` (most visible element wins) → number in `location.hash`.
 - WhatsApp: `services/whatsapp.js`. Without `WHATSAPP_TOKEN` it runs in dry-run mode and returns a `wa.me` click-to-chat URL. Live mode sends an approved template with 3 body variables (name, title, link).
 - Stats SQL lives in `services/stats.js`.
+- Presentation HTML is stored in PostgreSQL (`presentation_files`, migration 002) via `services/storage.js`; files in `UPLOAD_DIR` from older versions are read as a fallback. Keep it in the database: Render's free tier wipes the disk on restart.
+- Deployment: `render.yaml` (Render Blueprint, demo only, Frankfurt). `SEED_DEMO_DATA=true` runs the idempotent `seedDemo()` on start. `RENDER_EXTERNAL_URL` is the fallback for `PUBLIC_BASE_URL`. Real doctor data must be hosted in Kazakhstan, never on Render or Vercel.
 
 ## Design system (STADA corporate design)
 

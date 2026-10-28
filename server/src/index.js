@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 import { config, whatsappConfigured } from './config.js';
 import { query } from './db.js';
 import { migrate } from './migrate.js';
-import { ensureUploadDir } from './services/storage.js';
+import { seedDemo } from './seed.js';
 import { requireAuth } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
@@ -66,7 +66,8 @@ async function ensureAdmin() {
 
 async function main() {
   if (process.env.AUTO_MIGRATE !== 'false') await migrate();
-  await ensureUploadDir();
+  // Demo data on start, for hosted demos without shell access (e.g. Render free tier). Never with real data.
+  if (process.env.SEED_DEMO_DATA === 'true') await seedDemo();
   await ensureAdmin();
   app.listen(config.port, () => {
     console.log(`[server] http://localhost:${config.port}  (public links: ${config.publicBaseUrl})`);

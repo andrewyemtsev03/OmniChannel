@@ -2,7 +2,7 @@
 // Creates a rep and a reviewer, a few fictional doctors (some with СОПД), and an approved sample deck.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { pool, query } from './db.js';
 import { migrate } from './migrate.js';
@@ -18,7 +18,8 @@ async function upsertUser(email, name, role, password) {
     [email, name, role, hash])).rows[0].id;
 }
 
-async function main() {
+// Idempotent: safe to run on every start (SEED_DEMO_DATA=true).
+export async function seedDemo() {
   await migrate();
   const adminId = await upsertUser(process.env.ADMIN_EMAIL || 'admin@stada.kz', process.env.ADMIN_NAME || 'Platform Admin', 'admin', process.env.ADMIN_PASSWORD || 'ChangeMe123!');
   const repId = await upsertUser('rep@stada.kz', 'Demo Rep', 'rep', 'RepDemo123!');
@@ -109,7 +110,8 @@ async function main() {
   console.log('  admin    -> ' + (process.env.ADMIN_EMAIL || 'admin@stada.kz') + ' / ' + (process.env.ADMIN_PASSWORD ? '(from .env)' : 'ChangeMe123!'));
   console.log('  rep      -> rep@stada.kz / RepDemo123!');
   console.log('  reviewer -> mlr@stada.kz / MlrDemo123!');
-  await pool.end();
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  seedDemo().then(() => pool.end()).catch((err) => { console.error(err); process.exit(1); });
+}

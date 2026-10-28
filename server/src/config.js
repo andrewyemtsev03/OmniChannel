@@ -12,7 +12,8 @@ export const config = {
   nodeEnv,
   isProd: nodeEnv === 'production',
   port,
-  publicBaseUrl: (process.env.PUBLIC_BASE_URL || `http://localhost:${port}`).replace(/\/$/, ''),
+  // Render sets RENDER_EXTERNAL_URL automatically
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/$/, ''),
   databaseUrl: process.env.DATABASE_URL || 'postgres://stada:stada@localhost:5432/stada_omni',
   jwtSecret: process.env.JWT_SECRET || 'dev-only-secret-do-not-use-in-production',
   uploadDir: path.resolve(process.env.UPLOAD_DIR || './uploads'),
